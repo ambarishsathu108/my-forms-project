@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Personal Loan Journey — Local Demo</title>
+
+  <!--
+    STANDALONE DEMO PAGE
+    =====================
+    This page loads the personal-loan block directly without needing
+    the AEM proxy server. Use it to test the full journey locally.
+
+    To run with full EDS stack:   aem up
+    Then visit:                   http://localhost:3000/personal-loan
+  -->
+
+  <!-- EDS global styles -->
+  <link rel="stylesheet" href="styles/styles.css" />
+  <link rel="stylesheet" href="styles/fonts.css" />
+
+  <!-- Block styles loaded directly -->
+  <link rel="stylesheet" href="blocks/personal-loan/personal-loan.css" />
+
+  <style>
+    /* Demo page chrome */
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f5f7fa;
+      font-family: 'Roboto', sans-serif;
+    }
+
+    .demo-banner {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 10px 24px;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .demo-banner strong {
+      color: #fbbf24;
+    }
+
+    .demo-banner a {
+      color: #93c5fd;
+    }
+
+    /* Override min-height so the block sits naturally on this page */
+    .personal-loan {
+      min-height: unset;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Dev-only banner (won't appear on the real AEM-served page) -->
+  <div class="demo-banner">
+    <strong>⚡ LOCAL DEMO</strong>
+    All APIs are <strong>mocked</strong>. Use any mobile + PAN/DOB.
+    OTP: any 6 digits (except 000000). &nbsp;|&nbsp;
+    <a href="http://localhost:3000/personal-loan" target="_blank">Run full stack → localhost:3000</a>
+  </div>
+
+  <!--
+    THE BLOCK ELEMENT
+    =================
+    In AEM Author, the content author creates a page with a
+    "Personal Loan" block (table/section in the doc).
+
+    The block's first row can contain authoring config as key=value rows:
+      | identifier-type | PAN   |   ← shows PAN field on login
+      | identifier-type | DOB   |   ← shows DOB field on login
+      | partner-id      | HDFC  |   ← optional partner override
+
+    EDS converts that document table into the div structure below.
+    The block JS reads it via readBlockConfig().
+  -->
+  <div class="personal-loan block" data-block-name="personal-loan" data-block-status="initialized">
+    <!--
+      Authoring config rows — edit these to control block behaviour.
+      In a real AEM doc these are the 2-column table rows under the block header.
+    -->
+    <div><div>identifier-type</div><div>PAN</div></div>
+    <div><div>partner-id</div><div>HDFCBANK</div></div>
+  </div>
+
+  <!--
+    BLOCK BOOTSTRAP
+    ===============
+    EDS normally calls decorate(block) from scripts/scripts.js after
+    loading the block module. Here we do it manually for the demo.
+  -->
+  <script type="module">
+    import decorate from './blocks/personal-loan/personal-loan.js';
+
+    const block = document.querySelector('.personal-loan.block');
+    if (block) {
+      try {
+        decorate(block);
+      } catch (err) {
+        console.error('[Demo] Block failed to initialise:', err);
+        block.innerHTML = `<div style="padding:24px;color:red;font-family:monospace">
+          <strong>Block Error:</strong> ${err.message}<br>
+          Check the browser console for details.
+        </div>`;
+      }
+    }
+  </script>
+
+</body>
+</html>

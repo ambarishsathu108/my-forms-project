@@ -4937,5 +4937,36 @@
         "valueType": "string"
       }
     ]
+  },
+  {
+    "id": "personal-loan",
+    "fields": [
+      {
+        "component": "select",
+        "name": "identifier-type",
+        "label": "Login Identifier Type",
+        "valueType": "string",
+        "value": "PAN",
+        "options": [
+          {
+            "name": "PAN Number",
+            "value": "PAN"
+          },
+          {
+            "name": "Date of Birth",
+            "value": "DOB"
+          }
+        ],
+        "description": "Controls which secondary identifier (PAN or DOB) is shown on the login screen. No code change needed — pure authoring config."
+      },
+      {
+        "component": "text",
+        "name": "partner-id",
+        "label": "Partner ID",
+        "valueType": "string",
+        "value": "HDFCBANK",
+        "description": "Overrides the default partnerId sent in API context parameters."
+      }
+    ]
   }
 ]
