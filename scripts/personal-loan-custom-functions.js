@@ -107,3 +107,83 @@ export function submitLoanApplication(loanAmount, tenure, emi) {
     acknowledgementId: `ACK-${Date.now()}`,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Tier 2 — Advanced Login / API & FDM Integration functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Mocked PANEnquiry API.
+ * Failure scenario: PAN not matching the standard format (5 letters, 4 digits, 1 letter).
+ * @param {string} panNumber
+ * @returns {string} JSON string: { success, verified, panNumber, errorDesc }
+ */
+export function panEnquiry(panNumber) {
+  const pan = String(panNumber || '').toUpperCase();
+  if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(pan)) {
+    return JSON.stringify({ success: false, verified: false, errorDesc: 'Invalid PAN format.' });
+  }
+  return JSON.stringify({
+    success: true,
+    verified: true,
+    panNumber: pan,
+  });
+}
+
+/**
+ * Mocked GetBureauOffer (BRE2) API.
+ * Failure scenario: missing firstName, lastName, or dob.
+ * @param {string} firstName
+ * @param {string} lastName
+ * @param {string} dob - DD/MM/YYYY
+ * @returns {string} JSON string with customer + offer details, or an error
+ */
+export function getBureauOffer(firstName, lastName, dob) {
+  if (!firstName || !lastName || !dob) {
+    return JSON.stringify({ success: false, errorDesc: 'Customer details are required for bureau offer lookup.' });
+  }
+  return JSON.stringify({
+    success: true,
+    customerFirstName: firstName,
+    customerLastName: lastName,
+    customerCity: 'Mumbai',
+    customerState: 'Maharashtra',
+    offerType: 'LG_HNW_BL_PQ_NB_FEB22',
+    offerAmount: '1000000.00',
+    tenure: '36',
+    rateOfInterest: '10.20',
+    kycFlag: 'Y',
+    accountNumber: 'XX50151',
+    customerID: 'XX12345',
+  });
+}
+
+/**
+ * Mocked generateEmailOTP API.
+ * Failure scenario: missing or malformed email address.
+ * @param {string} emailAddress
+ * @returns {string} JSON string: { success, errorDesc }
+ */
+export function generateEmailOTP(emailAddress) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(emailAddress || ''))) {
+    return JSON.stringify({ success: false, errorDesc: 'Please enter a valid email address.' });
+  }
+  return JSON.stringify({ success: true });
+}
+
+/**
+ * Mocked validateEmailOTP API.
+ * Failure scenario: OTP "000000" simulates an invalid OTP.
+ * @param {string} emailAddress
+ * @param {string} otp - 6-digit OTP entered by the user
+ * @returns {string} JSON string: { success, errorDesc }
+ */
+export function validateEmailOTP(emailAddress, otp) {
+  if (!/^\d{6}$/.test(String(otp || ''))) {
+    return JSON.stringify({ success: false, errorDesc: 'Please enter a valid 6-digit OTP.' });
+  }
+  if (otp === '000000') {
+    return JSON.stringify({ success: false, errorDesc: 'Invalid OTP. Please try again.' });
+  }
+  return JSON.stringify({ success: true });
+}

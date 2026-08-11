@@ -1,465 +1,214 @@
-# EDS Capstone — Personal Loan Journey: Complete Setup Guide
+# EDS Forms Capstone — Personal Loan Journey: Setup & Status
 
-This document is your **end-to-end walkthrough** for getting the Personal Loan journey up and running, from local dev preview all the way to AEM Author publishing.
+This document tracks the **actual** implementation of the Personal Loan capstone journey,
+built as an **Adaptive Form authored in Universal Editor** — fragments, Rule Editor logic,
+and custom functions — per the capstone's mandatory requirement to use AEM Forms + EDS
+authoring tools rather than a hand-coded block.
 
----
-
-## Table of Contents
-
-1. [What's Already Built](#1-whats-already-built)
-2. [Quick Local Preview (No AEM needed)](#2-quick-local-preview-no-aem-needed)
-3. [Full EDS Stack with `aem up`](#3-full-eds-stack-with-aem-up)
-4. [Creating the Page in AEM Author (Universal Editor)](#4-creating-the-page-in-aem-author-universal-editor)
-5. [Block Authoring — How to Control the Form](#5-block-authoring--how-to-control-the-form)
-6. [Journey Flow & Test Credentials](#6-journey-flow--test-credentials)
-7. [Project File Map](#7-project-file-map)
-8. [Tier 1 Capstone Checklist](#8-tier-1-capstone-checklist)
-9. [Tier 2 Upgrade Path](#9-tier-2-upgrade-path)
-10. [Coding Guidelines Reference](#10-coding-guidelines-reference)
+> **Status as of this writing: IN PROGRESS.** Sections below reflect what is actually
+> built and verified vs. what is still pending. Do not treat this as a "done" checklist —
+> see [Section 6](#6-tier-1-status-honest-checklist) for the real state.
 
 ---
 
-## 1. What's Already Built
+## 1. Architecture
 
-All Tier 1 code is **complete and wired up**. You do not need to write any JS/CSS from scratch.
-
-| File | What it Does |
-|---|---|
-| `blocks/personal-loan/personal-loan.js` | Orchestrates all 6 journey steps (Login → OTP → Offer → EMI → Preview → Thank You) |
-| `blocks/personal-loan/personal-loan.css` | Full HDFC-branded styles, mobile-responsive |
-| `scripts/api-service.js` | All API calls (Tier 1: mocked, Tier 2: real `fetch()`) |
-| `scripts/emi-calculator.js` | Standard EMI formula: `P × r × (1+r)^n / ((1+r)^n - 1)` |
-| `scripts/journey-state.js` | `sessionStorage`-backed state manager, no PII logged |
-
-### Journey Steps
+Unlike a typical EDS block, this journey is built entirely through **AEM Forms authoring**:
 
 ```
-Step 1: Login       →  Mobile + PAN or DOB, OTP trigger
-Step 2: Verify OTP  →  6-digit OTP, 120-second countdown, resend
-Step 3: Offer       →  Pre-approved offer from API response
-Step 4: EMI Calc    →  Live EMI as user adjusts amount / tenure
-Step 5: Preview     →  Read-only summary + final consent
-Step 6: Thank You   →  Acknowledgement ID display
+AEM Author (Universal Editor)
+  /content/dam/formsanddocuments/ambarish-hdfc-capstone/
+    ├── header                  (Adaptive Form Fragment)
+    ├── otp-login               (Adaptive Form Fragment)
+    ├── offer-display           (Adaptive Form Fragment)
+    ├── preview                 (Adaptive Form Fragment)
+    ├── assets/                 (bank logo)
+    └── personal-loan-journey   (Adaptive Form — the main journey, Wizard-based)
+
+GitHub repo (this codebase)
+  scripts/personal-loan-custom-functions.js   ← registered via "Form Specific
+                                                  Custom Functions Path" on both
+                                                  the main form and each fragment
+                                                  that invokes a function
 ```
+
+The rendering pipeline is the **existing, untouched** `blocks/form/` engine in this repo
+(`form.js`, `rules/index.js`, `rules/RuleEngineWorker.js`) — no code changes were needed
+there. The Adaptive Form's JSON definition is authored entirely in AEM; this repo only
+supplies the custom functions file and the standard EDS boilerplate.
 
 ---
 
-## 2. Quick Local Preview (No AEM needed)
+## 2. Main Form Structure — `personal-loan-journey`
 
-Use this to see the form immediately in your browser via a static file server.
+A single Adaptive Form containing one **Wizard** component with 6 panels:
 
-### Step 1 — Install a local server (one-time)
-
-```bash
-npm install -g http-server
-```
-
-### Step 2 — Serve the project
-
-```bash
-cd c:\Users\ambarishs\Documents\GitHub\my-forms-project
-http-server . --cors -p 8080
-```
-
-### Step 3 — Open the demo page
-
-```
-http://localhost:8080/personal-loan-demo.html
-```
-
-> **What you'll see:** The full 6-step loan journey. All APIs are mocked.
-> No AEM Author connection needed.
-
----
-
-## 3. Full EDS Stack with `aem up`
-
-This runs the real EDS proxy server, which fetches page content from AEM Author
-and serves your local JS/CSS code. This is the correct way to develop and preview.
-
-### Step 1 — Install npm dependencies (one-time)
-
-```bash
-cd c:\Users\ambarishs\Documents\GitHub\my-forms-project
-npm install
-```
-
-### Step 2 — Start the AEM proxy dev server
-
-```bash
-aem up
-```
-
-The CLI will:
-- Start a local proxy at `http://localhost:3000`
-- Fetch page HTML from your AEM Author (`fstab.yaml` mount point)
-- Serve your local `blocks/`, `scripts/`, `styles/` files
-
-### Step 3 — Open the loan page
-
-```
-http://localhost:3000/personal-loan
-```
-
-> **Important:** The page `/personal-loan` must exist in AEM Author first.
-> See Section 4 below to create it.
-
-### Useful `aem` commands
-
-| Command | What it does |
-|---|---|
-| `aem up` | Start local proxy server (default port 3000) |
-| `aem up --port 4000` | Use a different port |
-| `aem login` | Authenticate with your AEM instance |
-
----
-
-## 4. Creating the Page in AEM Author (Universal Editor)
-
-This is the critical step that connects your code to AEM. The page in AEM Author is what
-`aem up` proxies — your local code runs on top of the authored page structure.
-
-### 4.1 — Log in to AEM Author
-
-Go to your AEM Author URL:
-
-```
-https://author-p96753-e1523920.adobeaemcloud.com
-```
-
-Log in with your AEM credentials.
-
-### 4.2 — Navigate to Sites
-
-1. Click the **AEM icon** (top left) → **Sites**
-2. You should see the project root: `my-forms-project`
-
-### 4.3 — Create a new page
-
-1. Navigate into the project: `my-forms-project → main`
-2. Click **Create → Page**
-3. Select the **Blank Page** template (or the EDS page template if one exists)
-4. Set the page name / URL slug: `personal-loan`
-5. Set the title: `Personal Loan Journey`
-6. Click **Create**
-
-### 4.4 — Open the page in Universal Editor
-
-1. Select your new `personal-loan` page
-2. Click **Open in Universal Editor** (or the pencil/edit icon)
-3. The page opens in the UE viewport
-
-### 4.5 — Add the Personal Loan block
-
-In Universal Editor:
-
-1. Click the **"+"** button to add a new component/block to the page
-2. Search for or select **"Personal Loan"** block
-   - If it doesn't appear, ensure `component-definition.json` and `component-models.json` are up to date (run `npm run build:json`)
-3. The block is placed on the page
-
-### 4.6 — Configure the block via authoring properties
-
-With the Personal Loan block selected in Universal Editor:
-
-1. Open the **Properties panel** (right sidebar)
-2. Set the following properties:
-
-| Property | Value | Effect |
+| Panel (Name) | Title | Contents |
 |---|---|---|
-| `identifier-type` | `PAN` | Login screen shows PAN field |
-| `identifier-type` | `DOB` | Login screen shows Date of Birth field |
-| `partner-id` | `HDFCBANK` | Sets the partner context (optional) |
+| `loginPanel` | Login | Fragment: `header` + Fragment: `otp-login` |
+| `otpPanel` | Verify OTP | `otp` (Text Input) + `verifyOtpBtn` (Button) |
+| `offerPanel` | Your Offer | Fragment: `offer-display` |
+| `emiPanel` | EMI Calculator | `loanAmount`, `tenure`, `emiAmount` (read-only), `proceedToPreviewBtn` |
+| `previewPanel` | Review & Submit | Fragment: `preview` |
+| `thankYouPanel` | Done | `acknowledgementId` (read-only) + confirmation text |
 
-> **Tier 2 note:** Create TWO pages:
-> - `/personal-loan-pan` with `identifier-type = PAN`
-> - `/personal-loan-dob` with `identifier-type = DOB`
-> This demonstrates authorable login variants without any code changes.
+## 3. Fragments
 
-### 4.7 — Publish the page
-
-1. Click **Publish** in Universal Editor
-2. The page is now live on the preview/publish CDN
-
-### 4.8 — Preview via `aem up`
-
-With `aem up` running and the page published:
-
-```
-http://localhost:3000/personal-loan
-```
-
-Your local `blocks/personal-loan/personal-loan.js` is served on top of the authored page.
+| Fragment | Fields |
+|---|---|
+| `header` | `bankLogo` (Image), title/subtitle Text components |
+| `otp-login` | `mobile`, `identifierType` (radio: PAN/DOB), `panField`, `dobField`, `consent`, `getOtpBtn` |
+| `offer-display` | `offerAmount`, `tenure`, `rateOfInterest`, `kycFlag` (all read-only), `proceedBtn` |
+| `preview` | `customerName`, `customerCity`, `previewLoanAmount`, `previewTenure`, `previewRate`, `previewEmi` (all read-only), `finalConsent`, `submitBtn` |
 
 ---
 
-## 5. Block Authoring — How to Control the Form
+## 4. Rule Editor Logic
 
-The block reads its configuration from **key-value rows** in the block's content table.
-This is the EDS authoring pattern — **no code changes needed** to change behaviour.
+### 4.1 — Field visibility via authoring (built inside `otp-login` fragment)
 
-### In the authored document (Universal Editor or Google Docs):
+Two rules, using the Rule Editor's native `Show`/`Hide` action with a `WHEN`/`ELSE`
+structure (no custom function needed for this part):
 
-The block table looks like this in the source:
+- **`panField` — Visibility**: `SHOW panField WHEN (identifierType is equal to 'PAN') ELSE Hide`
+- **`dobField` — Visibility**: `SHOW dobField WHEN (identifierType is equal to 'Date of Birth') ELSE Hide`
 
-```
-+------------------+----------+
-| Personal Loan    |          |  ← Block header row
-+------------------+----------+
-| identifier-type  | PAN      |  ← Config row 1
-+------------------+----------+
-| partner-id       | HDFCBANK |  ← Config row 2
-+------------------+----------+
-```
+> Note: the comparison value must match the field's actual **Display Value**
+> (e.g. `"Date of Birth"`), not a separate data-value code — this was confirmed by
+> checking the Rule Editor's own value-suggestion list rather than assuming.
 
-### This translates to the following DOM (what `readBlockConfig()` reads):
+### 4.2 — Journey navigation and mock data (simplified approach)
 
-```html
-<div class="personal-loan block">
-  <div><div>identifier-type</div><div>PAN</div></div>
-  <div><div>partner-id</div><div>HDFCBANK</div></div>
-</div>
-```
+**Known issue:** invoking custom functions from the Rule Editor via `Set Value of →
+Function Output → <function name>` has not been verified working — the function list
+returns empty even after the custom functions file was confirmed live and reachable on
+both the preview and production EDS URLs (see Section 7, Known Limitations). Rather than
+block all progress on this, the journey's navigation and mock data display for Tier 1 use
+**only built-in Rule Editor primitives** (`Set Value of` with String/Mathematical
+Expression sources, `Show`/`Hide`, `Navigate among the panels`, `Add Condition`/`Else`) —
+no custom function invocation required:
 
-### Available config keys
+- **`getOtpBtn`** (in `otp-login`, rule built from within the main form since it needs to
+  navigate to a panel that only exists in the main form's Wizard): on click → navigate to
+  `Verify OTP` panel.
+- **`verifyOtpBtn`**: on click → `WHEN otp is equal to "000000"` → show an error → `ELSE`
+  → set `offerAmount`/`tenure`/`rateOfInterest`/`kycFlag` to hardcoded String literals
+  matching the capstone doc's sample response, then navigate to `Your Offer`.
+- **`emiAmount`**: bound via a `Mathematical Expression` referencing `loanAmount`,
+  `tenure`, `rateOfInterest` directly — implements `EMI = P × r × (1+r)^n / ((1+r)^n - 1)`
+  without calling `calculateEMI()`.
+- **`submitBtn`**: on click → set `acknowledgementId` to a String literal → navigate to
+  `Done`.
 
-| Key | Values | Description |
-|---|---|---|
-| `identifier-type` | `PAN` \| `DOB` | Which secondary identifier to show on the login screen |
-| `partner-id` | string | Overrides the default `HDFCBANK` partnerId in API calls |
+### 4.3 — Custom functions file (written, registered, pending verification)
 
----
+`scripts/personal-loan-custom-functions.js` exports mocked Tier 1 and Tier 2 API
+functions, matching the capstone doc's request/response contracts:
 
-## 6. Journey Flow & Test Credentials
+**Tier 1:** `calculateEMI`, `calculateTotalPayable`, `initiateCustomerIdentification`,
+`verifyOTPAndGetDemogDetails`, `submitLoanApplication`
 
-### Step-by-step test walkthrough
+**Tier 2:** `panEnquiry`, `getBureauOffer`, `generateEmailOTP`, `validateEmailOTP`
 
-**Step 1: Login**
-- Mobile: any 10-digit number starting with 6–9, e.g. `9876543210`
-  - To trigger failure: use a mobile ending in `0000`, e.g. `9870000000`
-- PAN: any valid format, e.g. `ABCDE1234F`
-- DOB: any valid date, e.g. `27-02-1987`
-- Check the consent checkbox
-- Click **Get OTP**
+These are registered via **"Form Specific Custom Functions Path"** = `/scripts/personal-loan-custom-functions.js`,
+set on both the main form's root `Adaptive Form` node and the `otp-login` fragment's root
+node (each authoring context needs its own copy of this property — it does not inherit
+across fragment/form boundaries). The file is live and reachable at:
+- `https://main--my-forms-project--ambarishsathu108.aem.page/scripts/personal-loan-custom-functions.js`
+- `https://main--my-forms-project--ambarishsathu108.aem.live/scripts/personal-loan-custom-functions.js`
 
-**Step 2: Verify OTP**
-- Enter any 6 digits, e.g. `123456`
-  - To trigger OTP failure: enter `000000`
-- Click **Verify OTP**
-
-**Step 3: Offer**
-- The mocked response shows:
-  - Offer amount: ₹10,00,000
-  - Tenure: 36 months
-  - Rate: 10.20% p.a.
-- Click **Accept Offer & Calculate EMI**
-
-**Step 4: EMI Calculator**
-- Adjust loan amount (slider/input) — EMI recalculates live
-- Adjust tenure slider
-- Formula: `EMI = P × r × (1+r)^n / ((1+r)^n - 1)`
-- Example: ₹5,00,000 at 10.20% for 36 months ≈ ₹16,165/month
-- Click **Proceed to Preview**
-
-**Step 5: Preview**
-- Read-only summary of customer details + loan details
-- Check the final consent checkbox
-- Click **Submit Application**
-
-**Step 6: Thank You**
-- Acknowledgement ID displayed (e.g. `ACK-1720345678901`)
-- Click **Start New Application** to restart
-
-### Observing the journey state
-
-Open browser DevTools → Application → Session Storage → look for key `pl_journey_state`.
-You can see the full state object update in real-time as you move through steps.
-
-### Observing logs (no PII rule)
-
-Open browser DevTools → Console. You will see:
-```
-[Journey] Initialised. JourneyID: ACS-1720345678901
-[API] initiateCustomerIdentification called. JourneyID: ACS-...
-[API] initiateCustomerIdentification → responseCode: 0
-[Journey] Step: login → otp
-[API] verifyOTPAndGetDemogDetails called. JourneyID: ACS-...
-[Journey] Step: otp → offer
-...
-```
-
-**Note:** Mobile number, PAN, DOB, and customer name are NOT logged — only journey IDs and response codes.
+Whether AEM Author's Rule Editor can actually invoke them is unresolved (see Section 7).
+Even if unresolved, this file still documents the intended real API contracts and is the
+correct artifact to extend when Tier 2 wires real `fetch()` calls in place of mocks.
 
 ---
 
-## 7. Project File Map
+## 5. Test Walkthrough (once rules are fully wired)
+
+**Login panel:** Enter a 10-digit mobile number (6–9 start), toggle between PAN/Date of
+Birth, fill the shown field, check consent, click **Get OTP**.
+
+**Verify OTP panel:** Enter any 6 digits to succeed; enter `000000` to simulate failure.
+
+**Your Offer panel:** Shows mocked offer (₹10,00,000 / 36 months / 10.20% p.a.), click
+**Accept Offer & Calculate EMI**.
+
+**EMI Calculator panel:** Adjust loan amount/tenure — EMI recalculates live via the
+Mathematical Expression rule.
+
+**Review & Submit panel:** Read-only summary, check final consent, click **Submit
+Application**.
+
+**Done panel:** Shows a generated acknowledgement ID.
+
+---
+
+## 6. Tier 1 Status — Honest Checklist
+
+- [x] 4 Adaptive Form Fragments created, fielded, published (`header`, `otp-login`, `offer-display`, `preview`)
+- [x] Main Adaptive Form created with Wizard + 6 panels, all fragments/fields placed
+- [x] Custom Functions Path set (main form + `otp-login` fragment)
+- [x] PAN/DOB field visibility rule (authoring-driven, no code)
+- [x] Custom functions file written for both Tier 1 and Tier 2 mock APIs
+- [ ] Get OTP button → panel navigation rule (in progress — needs to be built from the
+      main form context, drilling into the embedded fragment's button)
+- [ ] Verify OTP button → mock data population + panel navigation rule
+- [ ] EMI Mathematical Expression rule
+- [ ] Submit button → panel navigation rule
+- [ ] Full journey tested end-to-end in Preview mode
+- [ ] HDFC theme applied via Theme editor
+- [ ] Form + fragments published, linked into an actual EDS page, tested in a real browser
+
+## 7. Known Limitations
+
+- **Custom function invocation from the Rule Editor is unverified.** The
+  `initiateCustomerIdentification` function (and others) do not appear in the
+  `Function Output` search list inside the Rule Editor, even after confirming the file is
+  correctly deployed and publicly reachable. Suspected cause: AEM Author's own Code Sync
+  (GitHub → Author, separate from the fast GitHub → EDS CDN publish) lagging or caching a
+  failed load state. Workaround adopted: Tier 1 logic uses only built-in Rule Editor
+  actions (Show/Hide, Set Value of with String/Mathematical Expression, Navigate among
+  panels) instead of custom function calls.
+- **Cross-fragment rule navigation is untested.** Whether a rule built on a
+  fragment-embedded component (e.g. `getOtpBtn`, which lives inside `otp-login`) can
+  target a Wizard panel that only exists in the main form has not been confirmed.
+- **`blocks/personal-loan/personal-loan.js` and `personal-loan.css`** in this repo are an
+  early hand-coded **prototype only** — they predate the decision to use Universal
+  Editor's Adaptive Forms authoring and are **not part of the graded Tier 1 deliverable**.
+  They are kept for reference but should not be submitted as the capstone artifact.
+
+---
+
+## 8. Tier 2 Scope (not started)
+
+- `personal-info` fragment (detailed KYC/employer/income screen)
+- `bureau-offer` fragment (e-verify income UI)
+- Two Advanced Login form variants (DOB-only, PAN-only) duplicated from the main form
+- Offer selection UI with persistence across wizard steps
+- Editable preview + verified back-navigation without data loss
+- OTP retry/attempt-count logic
+- Basic analytics event tracking
+- Final documentation: API/FDM configuration summary, analytics event list, known
+  limitations (this section)
+
+---
+
+## 9. Project File Map
 
 ```
 my-forms-project/
-│
-├── blocks/
-│   └── personal-loan/
-│       ├── personal-loan.js       ← 6-step journey orchestrator (MAIN BLOCK)
-│       └── personal-loan.css      ← HDFC-branded styles
-│
 ├── scripts/
-│   ├── api-service.js             ← API layer (mocked for Tier 1)
-│   ├── emi-calculator.js          ← EMI formula + INR formatter
-│   ├── journey-state.js           ← sessionStorage state manager
-│   ├── scripts.js                 ← EDS main script (loads blocks)
-│   └── aem.js                     ← EDS block loading utilities
-│
-├── styles/
-│   ├── styles.css                 ← EDS global styles
-│   └── fonts.css                  ← Roboto font loading
-│
-├── fstab.yaml                     ← AEM Author mount point config
-├── personal-loan-demo.html        ← Standalone local demo page
-├── component-models.json          ← UE block property definitions
-├── component-definition.json      ← UE block registry
-└── CAPSTONE-SETUP.md              ← This file
+│   └── personal-loan-custom-functions.js   ← Registered custom functions (Tier 1 + 2)
+├── blocks/personal-loan/                   ← OLD PROTOTYPE — not the deliverable
+│   ├── personal-loan.js
+│   └── personal-loan.css
+├── scripts/api-service.js                  ← OLD PROTOTYPE API layer — not the deliverable
+├── scripts/emi-calculator.js               ← OLD PROTOTYPE — not the deliverable
+├── scripts/journey-state.js                ← OLD PROTOTYPE — not the deliverable
+├── fstab.yaml                              ← AEM Author mount point config
+└── CAPSTONE-SETUP.md                       ← This file
 ```
 
 ---
 
-## 8. Tier 1 Capstone Checklist
-
-Use this to verify your Tier 1 submission is complete.
-
-### Code & Architecture
-- [x] Correct EDS block folder structure (`blocks/personal-loan/`)
-- [x] Block follows EDS convention: `export default function decorate(block) {}`
-- [x] Authoring config read via `readBlockConfig()` — no hardcoded values
-- [x] No hardcoded URLs or credentials in any file
-- [x] No PII (name, mobile, PAN, DOB) in console logs — only journey IDs
-
-### Journey Flow
-- [x] Login screen with Mobile + PAN/DOB toggle
-- [x] Client-side validation (mobile format, PAN format, DOB format, consent)
-- [x] OTP screen with 120-second countdown and resend button
-- [x] Offer display screen with offer details from API response
-- [x] EMI calculator with live recalculation
-- [x] Preview screen (read-only) with all loan details
-- [x] Submit button calls `submitLoanApplication` API
-- [x] Thank You screen with Acknowledgement ID
-
-### API & State
-- [x] `initiateCustomerIdentification` — mocked, one success + one failure
-- [x] `verifyOTPAndGetDemogDetails` — mocked, one success + one failure
-- [x] `submitLoanApplication` — mocked, returns unique ACK ID
-- [x] Journey state persisted in `sessionStorage`
-- [x] `bankJourneyID` captured from API response and stored in state
-- [x] State clears correctly on "Start New Application"
-
-### EMI Formula
-- [x] `EMI = P × r × (1+r)^n / ((1+r)^n - 1)`
-- [x] Monthly rate: `r = annualRate / 12 / 100`
-- [x] Correct for example: P=500000, rate=12%, n=36 → ₹16,607
-
-### Fragment Reusability (Tier 1 requirement)
-- The login, OTP, offer, and preview logic are all in **separate render functions**
-  (`renderLoginStep`, `renderOTPStep`, `renderOfferStep`, `renderPreviewStep`)
-- Each function is independently callable — this is the EDS equivalent of "fragments"
-- For full AEM fragment reuse in Tier 2, these become separate block folders
-
----
-
-## 9. Tier 2 Upgrade Path
-
-To upgrade to Tier 2 (Integration), make the following changes:
-
-### 9.1 — Replace mock APIs with real `fetch()` calls
-
-In `scripts/api-service.js`, replace each `// ---- TIER 1 MOCK ----` block with a real `fetch()`:
-
-```javascript
-// Example for initiateCustomerIdentification
-const state = getJourneyState();
-const payload = {
-  contextParam: state.contextParam,
-  requestString: {
-    mobileNo: params.mobileNo,
-    identifierName: params.identifierName,
-    identifierValue: params.identifierValue,
-    msgType: 'S',
-    fillerFields: { filler1:'',filler2:'',filler3:'',filler4:'',filler5:'',
-                    filler6:'',filler7:'',filler8:'',filler9:'',filler10:'' },
-  },
-};
-const response = await fetch(`${API_CONFIG.baseUrl}${API_CONFIG.initiateCustomerIdentification}`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(payload),
-});
-const raw = await response.json();
-return normaliseResponse(raw);
-```
-
-### 9.2 — Add the Personal Info screen (Tier 2 only)
-
-Add a new step between OTP and Offer:
-
-```
-Login → OTP → PersonalInfo → GetBureauOffer → Offer → EMI → Preview → Thank You
-```
-
-Add `renderPersonalInfoStep()` in `personal-loan.js` and add `{ id: 'personal-info', label: 'Details' }` to `STEPS`.
-
-### 9.3 — Create two loan pages for login variant demo
-
-In AEM Author, create:
-- `/personal-loan-pan` with `identifier-type = PAN`
-- `/personal-loan-dob` with `identifier-type = DOB`
-
-This demonstrates **authorable** login variants — no code change, pure authoring config.
-
-### 9.4 — Add Tier 2 APIs
-
-Implement these stubs in `scripts/api-service.js`:
-- `panEnquiry(params)` — validate PAN against bureau
-- `getBureauOffer(params)` — fetch bureau-driven offer (BRE2)
-- `generateEmailOTP(params)` — email OTP generation
-- `validateEmailOTP(params)` — email OTP validation
-
-### 9.5 — Add basic analytics
-
-Add event tracking at key moments:
-
-```javascript
-// In renderLoginStep — after successful OTP send:
-console.log(`[Analytics] event=otp_sent journeyId=${state.journeyId}`);
-
-// In renderOTPStep — after OTP verify:
-console.log(`[Analytics] event=otp_${result.success ? 'success' : 'failure'} journeyId=...`);
-
-// In renderOfferStep — on offer accept:
-console.log(`[Analytics] event=offer_accepted offerAmount=${offer.offerAmount} journeyId=...`);
-
-// In renderPreviewStep — on submit:
-console.log(`[Analytics] event=application_submitted journeyId=...`);
-```
-
----
-
-## 10. Coding Guidelines Reference
-
-Per the capstone requirements (Section 5 of the document):
-
-| Requirement | How It's Met |
-|---|---|
-| Proper EDS folder structure | `blocks/personal-loan/personal-loan.{js,css}` |
-| Reusable fragments | Separate `render*Step()` functions, independently callable |
-| Authorable rules & visibility | `identifier-type` config key controls field visibility |
-| Client-side validation | Mobile regex, PAN regex, DOB regex, consent check |
-| No hardcoded URLs or credentials | `API_CONFIG` object — base URL is empty string by default |
-| Clean logging, journey IDs only | All `console.log` uses `journeyId`, no PII fields |
-| No PI in logging | Verified: mobile, PAN, DOB, name never appear in logs |
-
-### Links from capstone doc
-- https://www.aem.live/docs/dev-collab-and-good-practices
-- https://experienceleague.adobe.com/en/docs/experience-manager-65/content/forms/adaptive-forms-basic-authoring/adaptive-forms-best-practices
-- https://www.aem.live/docs/faq
-
----
-
-*Document generated for EDS Capstone — Tier 1 (Foundation) + Tier 2 (Integration) guidance.*
+*Document reflects actual build state — kept in sync as authoring work progresses.*
