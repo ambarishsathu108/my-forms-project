@@ -699,6 +699,23 @@
               }
             }
           }
+        },
+        {
+          "title": "Personal Loan Orchestrator",
+          "id": "personal-loan-orchestrator",
+          "plugins": {
+            "xwalk": {
+              "page": {
+                "resourceType": "core/fd/components/form/textinput/v1/textinput",
+                "template": {
+                  "jcr:title": "Personal Loan Orchestrator",
+                  "fieldType": "text-input",
+                  "fd:viewType": "personal-loan-orchestrator",
+                  "visible": false
+                }
+              }
+            }
+          }
         }
       ]
     }

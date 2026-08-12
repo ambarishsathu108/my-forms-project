@@ -78,3 +78,12 @@ main .form .form-message.error-message {
 
 /* Selected radio/checkbox "card" gets an HDFC-blue accent dot (base rule already
    draws the dot using --button-primary-color, which is already HDFC blue above) */
+
+/* The Wizard's auto-generated "Next" button is hidden — the journey's own named
+   buttons (Get OTP, Verify OTP, Proceed, Submit) drive forward navigation with
+   business logic via the personal-loan-orchestrator custom component. "Back"
+   stays visible since it needs no business validation and gives free
+   back-navigation without data loss (Wizard panels are hidden, not destroyed). */
+main .form form .wizard .wizard-button-wrapper .wizard-button-next {
+    display: none;
+}
